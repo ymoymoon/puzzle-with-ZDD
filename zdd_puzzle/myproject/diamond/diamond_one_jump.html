@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ダイヤモンドゲーム ZDD解析</title>
+
+<style>
+:root{--bg:#0f1a2e;--surface:#162236;--card:#1c2d45;--border:#2a4a6b;
+      --accent:#4a9eff;--accent2:#7bc4ff;--text:#d0e8ff;--muted:#6a8aaa;
+      --radius:8px;--mono:"JetBrains Mono","Fira Code",monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);
+     font-family:"Noto Sans JP","Hiragino Sans",sans-serif;
+     line-height:1.6;padding-bottom:60px}
+header{background:var(--surface);border-bottom:2px solid var(--accent);padding:22px 36px 16px}
+header h1{font-size:1.45rem;font-weight:700;color:var(--accent2);margin-bottom:3px}
+header .sub{color:var(--muted);font-size:.83rem}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+         gap:11px;padding:22px 36px 0}
+.kpi{background:var(--card);border:1px solid var(--border);
+     border-radius:var(--radius);padding:12px 14px}
+.kpi .label{font-size:.67rem;color:var(--muted);text-transform:uppercase;
+            letter-spacing:.08em;margin-bottom:3px}
+.kpi .value{font-size:1.5rem;font-weight:700;color:var(--accent2);
+            font-family:var(--mono)}
+.kpi .unit{font-size:.70rem;color:var(--muted);margin-left:2px}
+section{padding:26px 36px 0}
+section h2{font-size:.93rem;font-weight:600;color:var(--accent);
+           border-left:3px solid var(--accent);padding-left:9px;margin-bottom:12px}
+.boards{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.board-card{background:var(--card);border:1px solid var(--border);
+            border-radius:var(--radius);padding:12px;text-align:center}
+.board-label{font-size:.70rem;color:var(--accent2);font-weight:600;
+             margin-bottom:7px;font-family:var(--mono)}
+.result-box{background:var(--card);border:2px solid var(--accent);
+            border-radius:var(--radius);padding:14px 20px;font-family:var(--mono)}
+.result-box .big{font-size:1.9rem;font-weight:700;color:var(--accent2);margin-right:4px}
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);
+            margin-bottom:4px}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.80rem}
+caption{text-align:left;padding:6px 12px 3px;font-size:.71rem;
+        color:var(--muted);background:var(--surface)}
+thead tr{background:var(--surface)}
+th{padding:6px 12px;text-align:right;color:var(--accent2);font-weight:600;
+   font-size:.71rem;border-bottom:1px solid var(--border)}
+th:first-child{text-align:center}
+td{padding:5px 12px;text-align:right;border-bottom:1px solid #1c2d45}
+td:first-child{text-align:center;color:var(--muted)}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:rgba(74,158,255,.07)}
+.player{background:var(--card);border:1px solid var(--border);
+        border-radius:var(--radius);padding:16px;
+        display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+#anim-canvas{border-radius:5px;display:block}
+.ctrl{flex:1;min-width:190px;display:flex;flex-direction:column;gap:9px}
+.flabel{font-size:.92rem;font-weight:700;color:var(--accent2);font-family:var(--mono)}
+.fdesc{font-size:.73rem;color:var(--muted);font-family:var(--mono)}
+.fcnt{font-size:.68rem;color:var(--muted);margin-top:2px}
+.btns{display:flex;gap:5px;flex-wrap:wrap}
+.btn{background:var(--surface);border:1px solid var(--border);border-radius:5px;
+     color:var(--accent2);font-family:var(--mono);font-size:.76rem;
+     padding:5px 9px;cursor:pointer;transition:background .12s}
+.btn:hover{background:var(--card);border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:#0f1a2e;
+             border-color:var(--accent);font-weight:700}
+.btn.primary:hover{background:var(--accent2)}
+.btn:disabled{opacity:.3;cursor:not-allowed}
+.spd{display:flex;align-items:center;gap:7px;font-size:.70rem;color:var(--muted)}
+input[type=range]{flex:1;accent-color:var(--accent)}
+.pbar{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.pfill{height:100%;background:var(--accent);transition:width .15s;width:0%}
+.legend{display:flex;gap:11px;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:4px;font-size:.69rem;color:var(--muted)}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.note{color:var(--muted);font-size:.78rem}
+.coord-note{background:var(--surface);border:1px solid var(--border);
+            border-radius:var(--radius);padding:10px 14px;
+            font-family:var(--mono);font-size:.76rem;color:var(--muted);
+            line-height:1.9;margin-bottom:4px}
+</style>
+</head>
+<body>
+<header>
+<h1>ダイヤモンドゲーム（菱形盤面）— ZDD 最短手数解析</h1>
+<div class="sub">菱形 25マス（1-2-3-4-5-4-3-2-1） &nbsp;|&nbsp; ペグ 3個 &nbsp;|&nbsp; 1歩:112 ジャンプ:78</div>
+</header>
+<div class="summary">
+<div class="kpi"><div class="label">最短手数</div><div class="value">12<span class="unit">手</span></div></div>
+<div class="kpi"><div class="label">実時間</div><div class="value">0.018<span class="unit">s</span></div></div>
+<div class="kpi"><div class="label">CPU時間</div><div class="value">0.018<span class="unit">s</span></div></div>
+<div class="kpi"><div class="label">盤面マス数</div><div class="value">25</div></div>
+<div class="kpi"><div class="label">ペグ数</div><div class="value">3</div></div>
+</div>
+<section>
+<h2>座標系</h2>
+<div class="coord-note">座標 (q,r): q∈[-2,2],  r∈[-2-q, 2-q] &nbsp;|&nbsp; 上頂点:(-2,4)  下頂点:(2,-4)  左頂点:(-2,0)  右頂点:(2,0) &nbsp;|&nbsp; 上三角形: r&ge;3 &nbsp; 下三角形: r&le;-3</div>
+</section>
+<section>
+<h2>初期盤面 / ゴール盤面</h2>
+<div class="boards">
+<div class="board-card"><div class="board-label">初期盤面（上三角形 r≥3）</div><svg width="170" height="252" viewBox="0 0 170 252" xmlns="http://www.w3.org/2000/svg"><rect width="170" height="252" fill="#e8d5b0" rx="4"/><circle cx="29.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="43.0" cy="101.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="57.0" cy="77.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="53.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="53.2" r="7.3" fill="#4a3728" stroke="#2a1a10" stroke-width="0.8"/><circle cx="85.0" cy="29.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="29.0" r="7.3" fill="#4a3728" stroke="#2a1a10" stroke-width="0.8"/><circle cx="43.0" cy="150.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="57.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="101.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="77.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="99.0" cy="53.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="99.0" cy="53.2" r="7.3" fill="#4a3728" stroke="#2a1a10" stroke-width="0.8"/><circle cx="57.0" cy="174.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="150.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="99.0" cy="101.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="113.0" cy="77.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="198.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="174.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="99.0" cy="150.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="113.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="127.0" cy="101.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="223.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="99.0" cy="198.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="113.0" cy="174.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="127.0" cy="150.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="141.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/></svg></div>
+<div class="board-card"><div class="board-label">ゴール盤面（下三角形 r≤-3）</div><svg width="170" height="252" viewBox="0 0 170 252" xmlns="http://www.w3.org/2000/svg"><rect width="170" height="252" fill="#e8d5b0" rx="4"/><circle cx="29.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="43.0" cy="101.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="57.0" cy="77.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="53.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="29.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="43.0" cy="150.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="57.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="101.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="77.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="99.0" cy="53.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="57.0" cy="174.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="150.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="99.0" cy="101.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="113.0" cy="77.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="198.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="71.0" cy="198.7" r="7.3" fill="#4a3728" stroke="#2a1a10" stroke-width="0.8"/><circle cx="85.0" cy="174.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="99.0" cy="150.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="113.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="127.0" cy="101.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="223.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="85.0" cy="223.0" r="7.3" fill="#4a3728" stroke="#2a1a10" stroke-width="0.8"/><circle cx="99.0" cy="198.7" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="99.0" cy="198.7" r="7.3" fill="#4a3728" stroke="#2a1a10" stroke-width="0.8"/><circle cx="113.0" cy="174.5" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="127.0" cy="150.2" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/><circle cx="141.0" cy="126.0" r="10.6" fill="#c8a97e" stroke="#9a7a55" stroke-width="0.8"/></svg></div>
+</div>
+</section>
+<section>
+<h2>最短手数の結果</h2>
+<div class="result-box"><span class="big">12</span>手（実: 0.018s，CPU: 0.018s）</div>
+</section>
+<section>
+<h2>解の手順（アニメーション）</h2>
+<div class="player">
+<canvas id="anim-canvas"></canvas>
+<div class="ctrl">
+<div>
+<div class="flabel" id="flabel">初期盤面</div>
+<div class="fdesc"  id="fdesc"></div>
+<div class="fcnt"   id="fcnt">0 / 12</div>
+</div>
+<div class="pbar"><div class="pfill" id="pfill"></div></div>
+<div class="btns">
+<button class="btn" id="b-first">⏮</button>
+<button class="btn" id="b-prev">◀</button>
+<button class="btn primary" id="b-play">▶ 再生</button>
+<button class="btn" id="b-next">▶</button>
+<button class="btn" id="b-last">⏭</button>
+</div>
+<div class="spd"><span>速度</span><input type="range" id="speed" min="200" max="3000" value="1000" step="100"><span id="sv">1.0s/手</span></div>
+<div class="legend">
+<div class="li"><span class="dot" style="background:#4a3728;border:1px solid #2a1a10"></span>ペグ</div>
+<div class="li"><span class="dot" style="background:#e05c5c"></span>移動元</div>
+<div class="li"><span class="dot" style="background:#e08c3c"></span>飛び越え</div>
+<div class="li"><span class="dot" style="background:#5cb85c"></span>移動先</div>
+</div>
+</div>
+</div>
+</section>
+<section>
+<h2>手順詳細</h2>
+<div class="table-wrap"><table><caption>解の手順（座標 (q,r)） · 手=ターン番号，連続ジャンプは同じ手番号内で複数行</caption><thead><tr><th>#</th><th>手</th><th>移動元</th><th>飛越え</th><th>移動先</th><th>種別</th></tr></thead><tbody><tr><td>0</td><td>1</td><td>(-2, 4)</td><td>4</td><td>(-2, 2)</td><td>step</td></tr><tr><td>2</td><td>3</td><td>(-2, 3)</td><td>-</td><td>(-1, 2)</td><td>step</td></tr><tr><td>2</td><td>3</td><td>(-1, 3)</td><td>9</td><td>(-1, 1)</td><td>step</td></tr><tr><td>3</td><td>4</td><td>(-1, 2)</td><td>8</td><td>(-1, 0)</td><td>step</td></tr><tr><td>4</td><td>5</td><td>(-2, 2)</td><td>8</td><td>(0, 0)</td><td>step</td></tr><tr><td>5</td><td>6</td><td>(-1, 1)</td><td>13</td><td>(1, -1)</td><td>step</td></tr><tr><td>7</td><td>8</td><td>(0, 0)</td><td>-</td><td>(0, -1)</td><td>step</td></tr><tr><td>7</td><td>8</td><td>(-1, 0)</td><td>12</td><td>(1, -2)</td><td>step</td></tr><tr><td>8</td><td>9</td><td>(1, -1)</td><td>17</td><td>(1, -3)</td><td>step</td></tr><tr><td>9</td><td>10</td><td>(0, -1)</td><td>17</td><td>(2, -3)</td><td>step</td></tr><tr><td>11</td><td>12</td><td>(1, -3)</td><td>-</td><td>(2, -4)</td><td>step</td></tr><tr><td>12</td><td>13</td><td>(1, -2)</td><td>-</td><td>(1, -3)</td><td>step</td></tr></tbody></table></div>
+</section>
+<section>
+<h2>BFS 探索ログ</h2>
+<div class="table-wrap"><table><caption>BFS探索ログ · 実0.018s · CPU0.018s</caption><thead><tr><th>手</th><th>実時間(s)</th><th>CPU(s)</th><th>新規盤面数</th><th>ZDDノード数</th></tr></thead><tbody><tr><td>1</td><td>0.000</td><td>0.000</td><td>6</td><td>11</td></tr><tr><td>2</td><td>0.000</td><td>0.000</td><td>26</td><td>30</td></tr><tr><td>3</td><td>0.001</td><td>0.001</td><td>70</td><td>63</td></tr><tr><td>4</td><td>0.001</td><td>0.001</td><td>154</td><td>110</td></tr><tr><td>5</td><td>0.003</td><td>0.003</td><td>264</td><td>182</td></tr><tr><td>6</td><td>0.005</td><td>0.005</td><td>378</td><td>241</td></tr><tr><td>7</td><td>0.007</td><td>0.007</td><td>459</td><td>281</td></tr><tr><td>8</td><td>0.011</td><td>0.011</td><td>437</td><td>258</td></tr><tr><td>9</td><td>0.014</td><td>0.014</td><td>300</td><td>183</td></tr><tr><td>10</td><td>0.016</td><td>0.016</td><td>165</td><td>108</td></tr><tr><td>11</td><td>0.017</td><td>0.017</td><td>36</td><td>27</td></tr><tr><td>12</td><td>0.018</td><td>0.018</td><td>4</td><td>5</td></tr></tbody></table></div>
+</section>
+
+<script>
+(function(){
+  var D=({"cells": [[1, 37.0, 161.7], [2, 55.0, 130.5], [3, 73.0, 99.4], [4, 91.0, 68.2], [5, 109.0, 37.0], [6, 55.0, 192.9], [7, 73.0, 161.7], [8, 91.0, 130.5], [9, 109.0, 99.4], [10, 127.0, 68.2], [11, 73.0, 224.1], [12, 91.0, 192.9], [13, 109.0, 161.7], [14, 127.0, 130.5], [15, 145.0, 99.4], [16, 91.0, 255.2], [17, 109.0, 224.1], [18, 127.0, 192.9], [19, 145.0, 161.7], [20, 163.0, 130.5], [21, 109.0, 286.4], [22, 127.0, 255.2], [23, 145.0, 224.1], [24, 163.0, 192.9], [25, 181.0, 161.7]], "r_hole": 13.7, "r_peg": 9.4, "board_w": 218, "board_h": 323, "frames": [{"pegs": [4, 5, 10], "fr": null, "ov": null, "to": null, "label": "初期盤面", "desc": ""}, {"pegs": [3, 4, 10], "fr": 5, "ov": 4, "to": 3, "label": "手 1 (step)", "desc": "(-2, 4) → 4 → (-2, 2)"}, {"pegs": [3, 9, 10], "fr": 4, "ov": null, "to": 9, "label": "手 3 (step) [1/2]", "desc": "(-2, 3) → (-1, 2)"}, {"pegs": [3, 8, 9], "fr": 10, "ov": 9, "to": 8, "label": "手 3 (step) [2/2]", "desc": "(-1, 3) → 9 → (-1, 1)"}, {"pegs": [3, 7, 8], "fr": 9, "ov": 8, "to": 7, "label": "手 4 (step)", "desc": "(-1, 2) → 8 → (-1, 0)"}, {"pegs": [7, 8, 13], "fr": 3, "ov": 8, "to": 13, "label": "手 5 (step)", "desc": "(-2, 2) → 8 → (0, 0)"}, {"pegs": [7, 13, 18], "fr": 8, "ov": 13, "to": 18, "label": "手 6 (step)", "desc": "(-1, 1) → 13 → (1, -1)"}, {"pegs": [7, 12, 18], "fr": 13, "ov": null, "to": 12, "label": "手 8 (step) [1/2]", "desc": "(0, 0) → (0, -1)"}, {"pegs": [12, 17, 18], "fr": 7, "ov": 12, "to": 17, "label": "手 8 (step) [2/2]", "desc": "(-1, 0) → 12 → (1, -2)"}, {"pegs": [12, 16, 17], "fr": 18, "ov": 17, "to": 16, "label": "手 9 (step)", "desc": "(1, -1) → 17 → (1, -3)"}, {"pegs": [16, 17, 22], "fr": 12, "ov": 17, "to": 22, "label": "手 10 (step)", "desc": "(0, -1) → 17 → (2, -3)"}, {"pegs": [17, 21, 22], "fr": 16, "ov": null, "to": 21, "label": "手 12 (step)", "desc": "(1, -3) → (2, -4)"}, {"pegs": [16, 21, 22], "fr": 17, "ov": null, "to": 16, "label": "手 13 (step)", "desc": "(1, -2) → (1, -3)"}]});
+  var cv=document.getElementById('anim-canvas');
+  var ctx=cv.getContext('2d');
+  var R=window.devicePixelRatio||1;
+  var W=D.board_w, H=D.board_h;
+  cv.width=W*R; cv.height=H*R;
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  ctx.scale(R,R);
+  var cm={};
+  D.cells.forEach(function(c){ cm[c[0]]=[c[1],c[2]]; });
+  function draw(fi){
+    var f=D.frames[fi], ps=new Set(f.pegs);
+    ctx.fillStyle='#e8d5b0';
+    ctx.beginPath(); ctx.roundRect(0,0,W,H,4); ctx.fill();
+    D.cells.forEach(function(c){
+      ctx.beginPath(); ctx.arc(c[1],c[2],D.r_hole,0,Math.PI*2);
+      ctx.fillStyle='#c8a97e'; ctx.fill();
+      ctx.strokeStyle='#9a7a55'; ctx.lineWidth=0.8; ctx.stroke();
+    });
+    D.cells.forEach(function(c){
+      if(!ps.has(c[0])) return;
+      var cl='#4a3728';
+      if(c[0]===f.fr) cl='#e05c5c';
+      else if(c[0]===f.ov) cl='#e08c3c';
+      else if(c[0]===f.to) cl='#5cb85c';
+      ctx.beginPath(); ctx.arc(c[1],c[2],D.r_peg,0,Math.PI*2);
+      ctx.fillStyle=cl; ctx.fill();
+      ctx.strokeStyle='#2a1a10'; ctx.lineWidth=1.2; ctx.stroke();
+    });
+    if(f.fr!==null && f.ov!==null){
+      var p1=cm[f.fr], pm=cm[f.ov], p2=cm[f.to];
+      ctx.save(); ctx.setLineDash([3,2]); ctx.lineWidth=1.5;
+      ctx.strokeStyle='rgba(123,196,255,.7)';
+      ctx.beginPath(); ctx.moveTo(p1[0],p1[1]);
+      ctx.lineTo(pm[0],pm[1]); ctx.lineTo(p2[0],p2[1]); ctx.stroke();
+      var a=Math.atan2(p2[1]-pm[1],p2[0]-pm[0]), l=8;
+      ctx.setLineDash([]); ctx.lineWidth=1.8; ctx.strokeStyle='#7bc4ff';
+      ctx.beginPath();
+      ctx.moveTo(p2[0],p2[1]);
+      ctx.lineTo(p2[0]-l*Math.cos(a-.4),p2[1]-l*Math.sin(a-.4));
+      ctx.moveTo(p2[0],p2[1]);
+      ctx.lineTo(p2[0]-l*Math.cos(a+.4),p2[1]-l*Math.sin(a+.4));
+      ctx.stroke(); ctx.restore();
+    } else if(f.fr!==null){
+      var p1=cm[f.fr], p2=cm[f.to];
+      ctx.save(); ctx.setLineDash([3,2]); ctx.lineWidth=1.5;
+      ctx.strokeStyle='rgba(123,196,255,.7)';
+      ctx.beginPath(); ctx.moveTo(p1[0],p1[1]); ctx.lineTo(p2[0],p2[1]); ctx.stroke();
+      var a=Math.atan2(p2[1]-p1[1],p2[0]-p1[0]), l=8;
+      ctx.setLineDash([]); ctx.lineWidth=1.8; ctx.strokeStyle='#7bc4ff';
+      ctx.beginPath();
+      ctx.moveTo(p2[0],p2[1]);
+      ctx.lineTo(p2[0]-l*Math.cos(a-.4),p2[1]-l*Math.sin(a-.4));
+      ctx.moveTo(p2[0],p2[1]);
+      ctx.lineTo(p2[0]-l*Math.cos(a+.4),p2[1]-l*Math.sin(a+.4));
+      ctx.stroke(); ctx.restore();
+    }
+  }
+  var cur=0, tot=D.frames.length-1, tm=null, iv=1000;
+  function g(id){ return document.getElementById(id); }
+  function ui(fi){
+    cur=fi; var f=D.frames[fi];
+    g('flabel').textContent=f.label;
+    g('fdesc').textContent=f.desc;
+    g('fcnt').textContent=fi+' / '+tot;
+    g('pfill').style.width=(tot>0?fi/tot*100:0)+'%';
+    g('b-prev').disabled=fi<=0; g('b-first').disabled=fi<=0;
+    g('b-next').disabled=fi>=tot; g('b-last').disabled=fi>=tot;
+    draw(fi);
+  }
+  function stop(){ if(tm){clearInterval(tm);tm=null;} g('b-play').textContent='▶ 再生'; }
+  function play(){
+    stop();
+    tm=setInterval(function(){ if(cur>=tot){stop();return;} ui(cur+1); },iv);
+    g('b-play').textContent='⏸ 停止';
+  }
+  g('b-play').addEventListener('click',function(){
+    if(tm)stop(); else{ if(cur>=tot)ui(0); play(); }
+  });
+  g('b-first').addEventListener('click',function(){ stop(); ui(0); });
+  g('b-last').addEventListener('click',function(){ stop(); ui(tot); });
+  g('b-prev').addEventListener('click',function(){ stop(); ui(Math.max(0,cur-1)); });
+  g('b-next').addEventListener('click',function(){ stop(); ui(Math.min(tot,cur+1)); });
+  var sp=g('speed');
+  sp.addEventListener('input',function(){
+    iv=parseInt(sp.value);
+    g('sv').textContent=(iv/1000).toFixed(1)+'s/手';
+    if(tm){ stop(); play(); }
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'){ stop(); ui(Math.min(tot,cur+1)); }
+    if(e.key==='ArrowLeft') { stop(); ui(Math.max(0,cur-1)); }
+    if(e.key===' '){ e.preventDefault(); g('b-play').click(); }
+  });
+  ui(0);
+})();
+</script>
+</body>
+</html>
