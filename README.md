@@ -1,5 +1,9 @@
 # puzzle solver with ZDD
 
+Note: Almost all of the code in this project is written by AI (Claude, Sonnet 4.6). 
+
+## puzzle types
+
 - peg solitaire : /zdd_puzzle/myproject/solit
 - diamond (personal) : /zdd_puzzle/myproject/diamond
 
